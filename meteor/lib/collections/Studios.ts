@@ -1,4 +1,11 @@
-import { registerCollection, ProtectedString, omit, ProtectedStringProperties, unprotectObject } from '../lib'
+import {
+	registerCollection,
+	ProtectedString,
+	omit,
+	ProtectedStringProperties,
+	unprotectObject,
+	protectString,
+} from '../lib'
 import * as _ from 'underscore'
 import {
 	IBlueprintConfig,
@@ -118,6 +125,12 @@ export enum StudioRouteBehavior {
 	TOGGLE = 1,
 	ACTIVATE_ONLY = 2,
 }
+
+export enum StudioRouteType {
+	REROUTE = 0,
+	REMAP = 1,
+}
+
 export interface RouteMapping extends ResultingMappingRoute {
 	/** Which original layer to route. If false, a "new" layer will be inserted during routing */
 	mappedLayer: string | undefined
@@ -133,7 +146,8 @@ export interface ResultingMappingRoutes {
 export interface ResultingMappingRoute {
 	outputMappedLayer: string
 	deviceType?: TSR.DeviceType
-	remapping?: Partial<MappingExt>
+	remapping?: Partial<BlueprintMapping>
+	routeType: StudioRouteType
 }
 
 export function getActiveRoutes(studio: Studio): ResultingMappingRoutes {
@@ -187,10 +201,21 @@ export function getRoutedMappings<M extends MappingExt>(
 		const routes = mappingRoutes.existing[inputLayer]
 		if (routes) {
 			for (const route of routes) {
-				const routedMapping: M = {
-					...inputMapping,
-					...(route.remapping || {}),
-				}
+				const routedMapping: M =
+					route.routeType === StudioRouteType.REMAP &&
+					route.deviceType &&
+					route.remapping &&
+					route.remapping.deviceId
+						? ({
+								...route.remapping,
+								lookahead: route.remapping.lookahead ?? LookaheadMode.NONE,
+								device: route.deviceType,
+								deviceId: protectString<any>(route.remapping.deviceId),
+						  } as M)
+						: {
+								...inputMapping,
+								...(route.remapping || {}),
+						  }
 				outputMappings[route.outputMappedLayer] = routedMapping
 			}
 		} else {
@@ -204,7 +229,7 @@ export function getRoutedMappings<M extends MappingExt>(
 			const routedMapping: MappingExt = {
 				lookahead: route.remapping.lookahead || LookaheadMode.NONE,
 				device: route.deviceType,
-				deviceId: route.remapping.deviceId,
+				deviceId: protectString<any>(route.remapping.deviceId),
 				...route.remapping,
 			}
 			outputMappings[route.outputMappedLayer] = routedMapping as M

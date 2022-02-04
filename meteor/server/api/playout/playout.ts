@@ -54,7 +54,8 @@ import { triggerWriteAccessBecauseNoCheckNecessary } from '../../security/lib/se
 import { StudioContentWriteAccess } from '../../security/studio'
 import {
 	afterTake,
-	resetPreviousSegmentAndClearNextSegmentId,
+	clearNextSegmentId,
+	resetPreviousSegment,
 	takeNextPartInnerSync,
 	updatePartInstanceOnTake,
 } from './take'
@@ -314,7 +315,8 @@ export namespace ServerPlayoutAPI {
 		rundownPlaylistId: RundownPlaylistId,
 		nextPartId: PartId | null,
 		setManually?: boolean,
-		nextTimeOffset?: number | undefined
+		nextTimeOffset?: number | undefined,
+		clearNextSegment?: boolean
 	): Promise<ClientAPI.ClientResponse<void>> {
 		check(rundownPlaylistId, String)
 		if (nextPartId) check(nextPartId, String)
@@ -333,7 +335,7 @@ export namespace ServerPlayoutAPI {
 					throw new Meteor.Error(501, `RundownPlaylist "${playlist._id}" cannot change next during hold!`)
 			},
 			async (cache) => {
-				await setNextPartInner(cache, nextPartId, setManually, nextTimeOffset)
+				await setNextPartInner(cache, nextPartId, setManually, nextTimeOffset, clearNextSegment)
 
 				return ClientAPI.responseSuccess(undefined)
 			}
@@ -344,7 +346,8 @@ export namespace ServerPlayoutAPI {
 		cache: CacheForPlayout,
 		nextPartId: PartId | DBPart | null,
 		setManually?: boolean,
-		nextTimeOffset?: number | undefined
+		nextTimeOffset?: number | undefined,
+		clearNextSegment?: boolean
 	): Promise<void> {
 		const playlist = cache.Playlist.doc
 		if (!playlist.activationId) throw new Meteor.Error(501, `Rundown Playlist "${playlist._id}" is not active!`)
@@ -361,6 +364,20 @@ export namespace ServerPlayoutAPI {
 			if (!nextPart) throw new Meteor.Error(404, `Part "${nextPartId}" not found!`)
 		}
 
+		// If we're setting the next point to somewhere other than the current segment, and in the queued segment, clear the queued segment
+		const { currentPartInstance } = playlist.getSelectedPartInstances()
+		if (
+			currentPartInstance &&
+			nextPart &&
+			currentPartInstance.segmentId !== nextPart.segmentId &&
+			playlist.nextSegmentId === nextPart.segmentId
+		) {
+			clearNextSegment = true
+		}
+
+		if (clearNextSegment) {
+			libSetNextSegment(cache, null)
+		}
 		await libsetNextPart(cache, nextPart ? { part: nextPart } : null, setManually, nextTimeOffset)
 
 		// update lookahead and the next part when we have an auto-next
@@ -943,7 +960,8 @@ export namespace ServerPlayoutAPI {
 							currentPartInstance
 						)
 
-						resetPreviousSegmentAndClearNextSegmentId(cache)
+						clearNextSegmentId(cache, currentPartInstance)
+						resetPreviousSegment(cache)
 
 						// Update the next partinstance
 						const nextPart = selectNextPart(
@@ -1169,7 +1187,7 @@ export namespace ServerPlayoutAPI {
 		cache: CacheForPlayout,
 		watchedPackagesFilter: MongoQuery<Omit<ExpectedPackageDBBase, 'studioId'>> | null,
 		func: (context: ActionExecutionContext, rundown: Rundown, currentPartInstance: PartInstance) => Promise<void>
-	): Promise<void> {
+	): Promise<{ queuedPartInstanceId?: PartInstanceId; taken?: boolean }> {
 		const now = getCurrentTime()
 
 		const playlist = cache.Playlist.doc
@@ -1216,14 +1234,27 @@ export namespace ServerPlayoutAPI {
 
 		if (actionContext.takeAfterExecute) {
 			await ServerPlayoutAPI.callTakeWithCache(cache, now)
+			return {
+				queuedPartInstanceId: actionContext.queuedPartInstanceId,
+				taken: true,
+			}
 		} else {
 			if (
 				actionContext.currentPartState !== ActionPartChange.NONE ||
 				actionContext.nextPartState !== ActionPartChange.NONE
 			) {
 				await updateTimeline(cache)
+				return {
+					queuedPartInstanceId: actionContext.queuedPartInstanceId,
+				}
+			}
+			if (actionContext.nextPartState !== ActionPartChange.NONE && actionContext.queuedPartInstanceId) {
+				return {
+					queuedPartInstanceId: actionContext.queuedPartInstanceId,
+				}
 			}
 		}
+		return {}
 	}
 	/**
 	 * This exists for the purpose of mocking this call for testing.

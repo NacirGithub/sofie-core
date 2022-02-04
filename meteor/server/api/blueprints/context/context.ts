@@ -25,7 +25,6 @@ import {
 	IBlueprintSegmentDB,
 	IBlueprintPartInstance,
 	IBlueprintPieceInstance,
-	IBlueprintRundownDB,
 	IBlueprintExternalMessageQueueObj,
 	IShowStyleContext,
 	IRundownContext,
@@ -38,6 +37,8 @@ import {
 	PackageInfo,
 	IStudioBaselineContext,
 	IShowStyleUserContext,
+	IBlueprintSegmentRundown,
+	IRundownUserContext,
 } from '@sofie-automation/blueprints-integration'
 import { Studio, StudioId } from '../../../../lib/collections/Studios'
 import {
@@ -62,7 +63,6 @@ import {
 	PartInstances,
 	protectPartInstance,
 	unprotectPartInstanceArray,
-	DBPartInstance,
 } from '../../../../lib/collections/PartInstances'
 import { ExternalMessageQueue } from '../../../../lib/collections/ExternalMessageQueue'
 import { ReadonlyDeep } from 'type-fest'
@@ -72,7 +72,7 @@ import _ from 'underscore'
 import { Segments } from '../../../../lib/collections/Segments'
 import { Meteor } from 'meteor/meteor'
 import { WatchedPackagesHelper } from './watchedPackages'
-import { MongoSelector } from '../../../../lib/typings/meteor'
+import { MediaObjects } from '../../../../lib/collections/MediaObjects'
 export interface ContextInfo {
 	/** Short name for the context (eg the blueprint function being called) */
 	name: string
@@ -168,6 +168,11 @@ export class StudioBaselineContext extends StudioContext implements IStudioBasel
 
 	getPackageInfo(packageId: string): readonly PackageInfo.Any[] {
 		return this.watchedPackages.getPackageInfo(packageId)
+	}
+
+	hackGetMediaObjectDuration(mediaId: string): number | undefined {
+		return MediaObjects.findOne({ mediaId: mediaId.toUpperCase(), studioId: protectString(this.studioId) })
+			?.mediainfo?.format?.duration
 	}
 }
 
@@ -273,13 +278,18 @@ export class ShowStyleUserContext extends ShowStyleContext implements IShowStyle
 	getPackageInfo(packageId: string): Readonly<Array<PackageInfo.Any>> {
 		return this.watchedPackages.getPackageInfo(packageId)
 	}
+
+	hackGetMediaObjectDuration(mediaId: string): number | undefined {
+		return MediaObjects.findOne({ mediaId: mediaId.toUpperCase(), studioId: protectString(this.studioId) })
+			?.mediainfo?.format?.duration
+	}
 }
 
 /** Rundown */
 
 export class RundownContext extends ShowStyleContext implements IRundownContext {
 	readonly rundownId: string
-	readonly rundown: Readonly<IBlueprintRundownDB>
+	readonly rundown: Readonly<IBlueprintSegmentRundown>
 	readonly _rundown: ReadonlyDeep<Rundown>
 	readonly playlistId: RundownPlaylistId
 
@@ -292,9 +302,41 @@ export class RundownContext extends ShowStyleContext implements IRundownContext 
 		super(contextInfo, studio, showStyleCompound)
 
 		this.rundownId = unprotectString(rundown._id)
-		this.rundown = unprotectObject(rundown)
+		this.rundown = rundownToSegmentRundown(rundown)
 		this._rundown = rundown
 		this.playlistId = rundown.playlistId
+	}
+}
+
+export class RundownUserContext extends RundownContext implements IRundownUserContext {
+	public readonly notes: INoteBase[] = []
+	private readonly tempSendNotesIntoBlackHole: boolean
+
+	notifyUserError(message: string, params?: { [key: string]: any }): void {
+		if (this.tempSendNotesIntoBlackHole) {
+			this.logError(`UserNotes: "${message}", ${JSON.stringify(params)}`)
+		} else {
+			this.notes.push({
+				type: NoteType.ERROR,
+				message: {
+					key: message,
+					args: params,
+				},
+			})
+		}
+	}
+	notifyUserWarning(message: string, params?: { [key: string]: any }): void {
+		if (this.tempSendNotesIntoBlackHole) {
+			this.logWarning(`UserNotes: "${message}", ${JSON.stringify(params)}`)
+		} else {
+			this.notes.push({
+				type: NoteType.WARNING,
+				message: {
+					key: message,
+					args: params,
+				},
+			})
+		}
 	}
 }
 
@@ -360,6 +402,11 @@ export class SegmentUserContext extends RundownContext implements ISegmentUserCo
 
 	getPackageInfo(packageId): Readonly<Array<PackageInfo.Any>> {
 		return this.watchedPackages.getPackageInfo(packageId)
+	}
+
+	hackGetMediaObjectDuration(mediaId: string): number | undefined {
+		return MediaObjects.findOne({ mediaId: mediaId.toUpperCase(), studioId: protectString(this.studioId) })
+			?.mediainfo?.format?.duration
 	}
 }
 
@@ -652,21 +699,18 @@ export class RundownTimingEventContext extends RundownDataChangedEventContext im
 		this.nextPart = unprotectPartInstance(nextPartInstance)
 	}
 
-	getFirstPartInstanceInRundown(allowUntimed?: boolean): Readonly<IBlueprintPartInstance<unknown>> {
-		const query: MongoSelector<DBPartInstance> = {
-			rundownId: this._rundown._id,
-			playlistActivationId: this._currentPart.playlistActivationId,
-		}
-
-		if (!allowUntimed) {
-			query['part.untimed'] = { $ne: true }
-		}
-
-		const partInstance = PartInstances.findOne(query, {
-			sort: {
-				takeCount: 1,
+	getFirstPartInstanceInRundown(): Readonly<IBlueprintPartInstance<unknown>> {
+		const partInstance = PartInstances.findOne(
+			{
+				rundownId: this._rundown._id,
+				playlistActivationId: this._currentPart.playlistActivationId,
 			},
-		})
+			{
+				sort: {
+					takeCount: 1,
+				},
+			}
+		)
 
 		// If this doesn't find anything, then where did our reference PartInstance come from?
 		if (!partInstance)
@@ -722,5 +766,12 @@ export class RundownTimingEventContext extends RundownDataChangedEventContext im
 				rundownId: this._rundown._id,
 			})
 		)
+	}
+}
+
+export function rundownToSegmentRundown(rundown: ReadonlyDeep<Rundown>): IBlueprintSegmentRundown {
+	return {
+		externalId: rundown.externalId,
+		metaData: rundown.metaData,
 	}
 }

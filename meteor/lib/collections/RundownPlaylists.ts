@@ -16,7 +16,7 @@ import { Studio, Studios, StudioId } from './Studios'
 import { Segments, Segment, DBSegment, SegmentId } from './Segments'
 import { Parts, Part, DBPart, PartId } from './Parts'
 import { RundownPlaylistTiming, TimelinePersistentState } from '@sofie-automation/blueprints-integration'
-import { PartInstance, PartInstances, PartInstanceId } from './PartInstances'
+import { PartInstance, PartInstances, PartInstanceId, SegmentPlayoutId } from './PartInstances'
 import { createMongoCollection } from './lib'
 import { OrganizationId } from './Organization'
 import { registerIndex } from '../database'
@@ -210,6 +210,7 @@ export class RundownPlaylist implements DBRundownPlaylist {
 				playlistId: 1,
 				timing: 1,
 				showStyleBaseId: 1,
+				endOfRundownIsShowBreak: 1,
 			},
 		})
 		const segments = Segments.find(
@@ -413,6 +414,9 @@ export class RundownPlaylist implements DBRundownPlaylist {
 	getActivePartInstancesMap(selector?: MongoQuery<PartInstance>, options?: FindOptions<PartInstance>) {
 		const instances = this.getActivePartInstances(selector, options)
 		return normalizeArrayFunc(instances, (i) => unprotectString(i.part._id))
+	}
+	getPartInstancesForSegmentPlayout(rundownId: RundownId, segmentPlayoutId: SegmentPlayoutId) {
+		return PartInstances.find({ rundownId, segmentPlayoutId }, { sort: { takeCount: 1 } }).fetch()
 	}
 	static _sortSegments(segments: Segment[], rundowns: Array<ReadonlyDeep<DBRundown>>) {
 		const rundownsMap = normalizeArray(rundowns, '_id')

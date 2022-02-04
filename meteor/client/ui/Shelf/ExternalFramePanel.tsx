@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Meteor } from 'meteor/meteor'
 import { Random } from 'meteor/random'
 import * as _ from 'underscore'
+import ClassNames from 'classnames'
 import {
 	RundownLayoutExternalFrame,
 	RundownLayoutBase,
@@ -498,10 +499,21 @@ export const ExternalFramePanel = withTranslation()(
 		}
 
 		render() {
-			const scale = this.props.panel.scale || 1
+			const isDashboardLayout = RundownLayoutsAPI.isDashboardLayout(this.props.layout)
+			const scale = isDashboardLayout ? (this.props.panel as DashboardLayoutExternalFrame).scale || 1 : 1
+			const frameStyle = {
+				transform: `scale(${scale})`,
+				width: `calc(100% / ${scale})`,
+				height: `calc(100% / ${scale})`,
+			}
 			return (
 				<div
-					className="external-frame-panel"
+					className={ClassNames(
+						'external-frame-panel',
+						RundownLayoutsAPI.isDashboardLayout(this.props.layout)
+							? (this.props.panel as DashboardLayoutExternalFrame).customClasses
+							: undefined
+					)}
 					style={_.extend(
 						RundownLayoutsAPI.isDashboardLayout(this.props.layout)
 							? dashboardElementPosition(this.props.panel as DashboardLayoutExternalFrame)
@@ -516,12 +528,9 @@ export const ExternalFramePanel = withTranslation()(
 						className="external-frame-panel__iframe"
 						src={this.props.panel.url}
 						sandbox="allow-forms allow-popups allow-scripts allow-same-origin"
-						style={{
-							transform: `scale(${scale})`,
-							width: `calc(100% / ${scale})`,
-							height: `calc(100% / ${scale})`,
-						}}
+						style={frameStyle}
 					></iframe>
+					{this.props.panel.disableFocus && <div className="external-frame-panel__overlay" style={frameStyle}></div>}
 				</div>
 			)
 		}

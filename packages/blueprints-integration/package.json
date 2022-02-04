@@ -1,19 +1,19 @@
 {
-	"name": "@sofie-automation/blueprints-integration",
-	"version": "1.37.2",
+	"name": "@tv2media/blueprints-integration",
+	"version": "1.37.1-in-testing.1",
 	"description": "Library to define the interaction between core and the blueprints.",
 	"main": "dist/index.js",
 	"typings": "dist/index.d.ts",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/nrkno/tv-automation-server-core.git",
+		"url": "git+https://github.com/tv2/tv-automation-server-core.git",
 		"directory": "packages/blueprints-integration"
 	},
 	"bugs": {
-		"url": "https://github.com/nrkno/tv-automation-server-core/issues"
+		"url": "https://github.com/tv2/tv-automation-server-core/issues"
 	},
-	"homepage": "https://github.com/nrkno/tv-automation-server-core/blob/master/packages/blueprints-integration#readme",
+	"homepage": "https://github.com/tv2/tv-automation-server-core/blob/master/packages/blueprints-integration#readme",
 	"scripts": {
 		"build": "rimraf dist && yarn build:main",
 		"build:main": "tsc -p tsconfig.build.json",
@@ -40,7 +40,7 @@
 	],
 	"dependencies": {
 		"moment": "2.29.1",
-		"timeline-state-resolver-types": "6.2.0",
+		"timeline-state-resolver-types": "npm:@tv2media/timeline-state-resolver-types@1.0.0-release37",
 		"tslib": "^2.3.1",
 		"underscore": "1.13.1"
 	},

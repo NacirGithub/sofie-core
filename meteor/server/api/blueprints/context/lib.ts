@@ -32,6 +32,7 @@ export const IBlueprintPieceSampleKeys = allKeysOfObject<IBlueprintPiece>({
 	adlibAutoNext: true,
 	adlibAutoNextOverlap: true,
 	adlibDisableOutTransition: true,
+	adlibTransitionKeepAlive: true,
 	tags: true,
 	expectedPackages: true,
 	hasSideEffects: true,
@@ -58,4 +59,6 @@ export const IBlueprintMutatablePartSampleKeys = allKeysOfObject<IBlueprintMutat
 	displayDurationGroup: true,
 	displayDuration: true,
 	identifier: true,
+	budgetDuration: true,
+	hackListenToMediaObjectUpdates: true,
 })

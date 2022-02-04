@@ -10,9 +10,12 @@ import { PartInstance } from '../../../../lib/collections/PartInstances'
 import { RundownTiming, TimeEventArgs } from './RundownTiming'
 import { RundownTimingCalculator, RundownTimingContext } from '../../../../lib/rundown/rundownTiming'
 import { Rundown } from '../../../../lib/collections/Rundowns'
+import _ from 'underscore'
+import { DBSegment } from '../../../../lib/collections/Segments'
 
 const TIMING_DEFAULT_REFRESH_INTERVAL = 1000 / 60 // the interval for high-resolution events (timeupdateHR)
-const LOW_RESOLUTION_TIMING_DECIMATOR = 15 // the low-resolution events will be called every
+const LOW_RESOLUTION_TIMING_DECIMATOR = 15
+
 // LOW_RESOLUTION_TIMING_DECIMATOR-th time of the high-resolution events
 
 const CURRENT_TIME_GRANULARITY = 1000 / 60
@@ -34,6 +37,7 @@ interface IRundownTimingProviderProps {
 }
 interface IRundownTimingProviderChildContext {
 	durations: RundownTimingContext
+	lowResDurations: RundownTimingContext
 }
 interface IRundownTimingProviderState {}
 interface IRundownTimingProviderTrackedProps {
@@ -41,6 +45,8 @@ interface IRundownTimingProviderTrackedProps {
 	currentRundown: Rundown | undefined
 	parts: Array<Part>
 	partInstancesMap: Map<PartId, PartInstance>
+	segmentEntryPartInstances: PartInstance[]
+	segments: DBSegment[]
 }
 
 /**
@@ -56,16 +62,35 @@ export const RundownTimingProvider = withTracker<
 >((props) => {
 	let rundowns: Array<Rundown> = []
 	let parts: Array<Part> = []
+	let segments: Array<DBSegment> = []
 	const partInstancesMap = new Map<PartId, PartInstance>()
 	let currentRundown: Rundown | undefined
+	const segmentEntryPartInstances: PartInstance[] = []
 	if (props.playlist) {
 		rundowns = props.playlist.getRundowns()
-		const { parts: incomingParts } = props.playlist.getSegmentsAndPartsSync()
+		const { parts: incomingParts, segments: incomingSegments } = props.playlist.getSegmentsAndPartsSync()
 		parts = incomingParts
+		segments = incomingSegments
 		const partInstances = props.playlist.getActivePartInstances()
 
 		const currentPartInstance = partInstances.find((p) => p._id === props.playlist!.currentPartInstanceId)
+		const previousPartInstance = partInstances.find((p) => p._id === props.playlist!.previousPartInstanceId)
 		currentRundown = currentPartInstance ? rundowns.find((r) => r._id === currentPartInstance.rundownId) : rundowns[0]
+		segmentEntryPartInstances.push(
+			..._.compact([
+				currentPartInstance &&
+					props.playlist.getPartInstancesForSegmentPlayout(
+						currentPartInstance.rundownId,
+						currentPartInstance.segmentPlayoutId
+					)[0],
+				previousPartInstance &&
+					previousPartInstance.segmentPlayoutId !== currentPartInstance?.segmentPlayoutId &&
+					props.playlist.getPartInstancesForSegmentPlayout(
+						previousPartInstance.rundownId,
+						previousPartInstance.segmentPlayoutId
+					)[0],
+			])
+		)
 
 		partInstances.forEach((partInstance) => {
 			partInstancesMap.set(partInstance.part._id, partInstance)
@@ -110,6 +135,8 @@ export const RundownTimingProvider = withTracker<
 		currentRundown,
 		parts,
 		partInstancesMap,
+		segmentEntryPartInstances,
+		segments,
 	}
 })(
 	class RundownTimingProvider
@@ -121,16 +148,21 @@ export const RundownTimingProvider = withTracker<
 	{
 		static childContextTypes = {
 			durations: PropTypes.object.isRequired,
+			lowResDurations: PropTypes.object.isRequired,
 		}
 
 		durations: RundownTimingContext = {
 			isLowResolution: false,
+		}
+		lowResDurations: RundownTimingContext = {
+			isLowResolution: true,
 		}
 		refreshTimer: number
 		refreshTimerInterval: number
 		refreshDecimator: number
 
 		private timingCalculator: RundownTimingCalculator = new RundownTimingCalculator()
+		private lastSyncedTime: number = 0
 
 		constructor(props: IRundownTimingProviderProps & IRundownTimingProviderTrackedProps) {
 			super(props)
@@ -143,6 +175,7 @@ export const RundownTimingProvider = withTracker<
 		getChildContext(): IRundownTimingProviderChildContext {
 			return {
 				durations: this.durations,
+				lowResDurations: this.lowResDurations,
 			}
 		}
 
@@ -151,15 +184,25 @@ export const RundownTimingProvider = withTracker<
 		}
 
 		onRefreshTimer = () => {
-			const now = this.calmDownTiming(getCurrentTime())
+			const now = getCurrentTime()
+			const calmedDownNow = this.calmDownTiming(now)
+			this.updateDurations(calmedDownNow, false)
+			this.dispatchHREvent(calmedDownNow)
+
 			const isLowResolution = this.refreshDecimator % LOW_RESOLUTION_TIMING_DECIMATOR === 0
-			this.updateDurations(now, isLowResolution)
-			this.dispatchHREvent(now)
+			if (isLowResolution) {
+				this.dispatchLREvent(calmedDownNow)
+			}
+
+			const syncedEventTimeNow = Math.floor(now / 1000) * 1000
+			const isSynced = Math.abs(syncedEventTimeNow - this.lastSyncedTime) >= 1000
+			if (isSynced) {
+				this.lastSyncedTime = syncedEventTimeNow
+				this.updateDurations(syncedEventTimeNow, true)
+				this.dispatchSyncedEvent(syncedEventTimeNow)
+			}
 
 			this.refreshDecimator++
-			if (isLowResolution) {
-				this.dispatchEvent(now)
-			}
 		}
 
 		componentDidMount() {
@@ -176,7 +219,11 @@ export const RundownTimingProvider = withTracker<
 				Meteor.clearInterval(this.refreshTimer)
 				this.refreshTimer = Meteor.setInterval(this.onRefreshTimer, this.refreshTimerInterval)
 			}
-			if (prevProps.parts !== this.props.parts) {
+			if (
+				prevProps.parts !== this.props.parts ||
+				prevProps.playlist?.nextPartInstanceId !== this.props.playlist?.nextPartInstanceId ||
+				prevProps.playlist?.currentPartInstanceId !== this.props.playlist?.currentPartInstanceId
+			) {
 				// empty the temporary Part Instances cache
 				this.timingCalculator.clearTempPartInstances()
 				this.onRefreshTimer()
@@ -190,7 +237,7 @@ export const RundownTimingProvider = withTracker<
 		}
 
 		dispatchHREvent(now: number) {
-			const event = new CustomEvent<TimeEventArgs>(RundownTiming.Events.timeupdateHR, {
+			const event = new CustomEvent<TimeEventArgs>(RundownTiming.Events.timeupdateHighResolution, {
 				detail: {
 					currentTime: now,
 				},
@@ -199,8 +246,18 @@ export const RundownTimingProvider = withTracker<
 			window.dispatchEvent(event)
 		}
 
-		dispatchEvent(now: number) {
-			const event = new CustomEvent<TimeEventArgs>(RundownTiming.Events.timeupdate, {
+		dispatchLREvent(now: number) {
+			const event = new CustomEvent<TimeEventArgs>(RundownTiming.Events.timeupdateLowResolution, {
+				detail: {
+					currentTime: now,
+				},
+				cancelable: false,
+			})
+			window.dispatchEvent(event)
+		}
+
+		dispatchSyncedEvent(now: number) {
+			const event = new CustomEvent<TimeEventArgs>(RundownTiming.Events.timeupdateSynced, {
 				detail: {
 					currentTime: now,
 				},
@@ -210,20 +267,25 @@ export const RundownTimingProvider = withTracker<
 		}
 
 		updateDurations(now: number, isLowResolution: boolean) {
-			const { playlist, rundowns, currentRundown, parts, partInstancesMap } = this.props
-			this.durations = Object.assign(
-				this.durations,
-				this.timingCalculator.updateDurations(
-					now,
-					isLowResolution,
-					playlist,
-					rundowns,
-					currentRundown,
-					parts,
-					partInstancesMap,
-					this.props.defaultDuration
-				)
+			const { playlist, rundowns, currentRundown, parts, partInstancesMap, segmentEntryPartInstances, segments } =
+				this.props
+			const updatedDurations = this.timingCalculator.updateDurations(
+				now,
+				isLowResolution,
+				playlist,
+				rundowns,
+				currentRundown,
+				parts,
+				partInstancesMap,
+				segments,
+				this.props.defaultDuration,
+				segmentEntryPartInstances
 			)
+			if (!isLowResolution) {
+				this.durations = Object.assign(this.durations, updatedDurations)
+			} else {
+				this.lowResDurations = Object.assign(this.lowResDurations, updatedDurations)
+			}
 		}
 
 		render() {

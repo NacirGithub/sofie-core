@@ -7,7 +7,12 @@ import ClassNames from 'classnames'
 import { RundownPlaylist } from '../../../../lib/collections/RundownPlaylists'
 import { Studio } from '../../../../lib/collections/Studios'
 import { SegmentUi, PartUi, IOutputLayerUi, PieceUi, LIVE_LINE_TIME_PADDING } from '../SegmentTimelineContainer'
-import { WithTiming, withTiming } from '../../RundownView/RundownTiming/withTiming'
+import {
+	TimingDataResolution,
+	TimingTickResolution,
+	WithTiming,
+	withTiming,
+} from '../../RundownView/RundownTiming/withTiming'
 import { RundownTiming } from '../../RundownView/RundownTiming/RundownTiming'
 
 import { RundownUtils } from '../../../lib/rundown'
@@ -61,13 +66,16 @@ interface IProps {
 	relative: boolean
 	totalSegmentDuration?: number
 	firstPartInSegment?: PartUi
+	lastPartInSegment?: PartUi
 	onContextMenu?: (contextMenuContext: IContextMenuContext) => void
 	isLastInSegment: boolean
 	isAfterLastValidInSegmentAndItsLive: boolean
 	isLastSegment: boolean
+	isBudgetGap: boolean
 	isPreview?: boolean
 	cropDuration?: number
 	className?: string
+	showDurationSourceLayers?: Set<string>
 }
 
 interface IState {
@@ -363,6 +371,19 @@ export class SegmentTimelinePartClass extends React.Component<Translated<WithTim
 	}
 
 	static getPartStartsAt(props: WithTiming<IProps>): number {
+		if (props.isBudgetGap) {
+			return Math.max(
+				0,
+				(props.lastPartInSegment &&
+					props.firstPartInSegment &&
+					props.timingDurations.partDisplayStartsAt &&
+					props.timingDurations.partDisplayDurations &&
+					props.timingDurations.partDisplayStartsAt[unprotectString(props.lastPartInSegment.instance.part._id)] -
+						props.timingDurations.partDisplayStartsAt[unprotectString(props.firstPartInSegment.instance.part._id)] +
+						props.timingDurations.partDisplayDurations[unprotectString(props.lastPartInSegment.instance.part._id)]) ||
+					0
+			)
+		}
 		return Math.max(
 			0,
 			(props.firstPartInSegment &&
@@ -443,6 +464,7 @@ export class SegmentTimelinePartClass extends React.Component<Translated<WithTim
 								liveLinePadding={SegmentTimelinePartClass.getLiveLineTimePadding(this.props.timeScale)}
 								indexOffset={currentIndex}
 								isPreview={this.props.isPreview || false}
+								showDurationSourceLayers={this.props.showDurationSourceLayers}
 							/>
 						)
 					}
@@ -468,16 +490,17 @@ export class SegmentTimelinePartClass extends React.Component<Translated<WithTim
 	}
 
 	private renderEndOfSegment = (t: TFunction, innerPart: Part, isEndOfShow: boolean, isEndOfLoopingShow?: boolean) => {
+		const isNext =
+			this.state.isLive &&
+			((!this.props.isLastSegment && !this.props.isLastInSegment) || !!this.props.playlist.nextPartInstanceId) &&
+			!innerPart.invalid
 		return (
 			<>
-				{this.props.isLastInSegment && (
+				{this.props.isLastInSegment && !this.props.isBudgetGap && (
 					<div
 						className={ClassNames('segment-timeline__part__nextline', 'segment-timeline__part__nextline--endline', {
 							'auto-next': innerPart.autoNext,
-							'is-next':
-								this.state.isLive &&
-								((!this.props.isLastSegment && !this.props.isLastInSegment) ||
-									!!this.props.playlist.nextPartInstanceId),
+							'is-next': isNext,
 							'show-end': isEndOfShow,
 						})}
 					>
@@ -495,10 +518,7 @@ export class SegmentTimelinePartClass extends React.Component<Translated<WithTim
 				{!isEndOfShow && this.props.isLastInSegment && (
 					<div
 						className={ClassNames('segment-timeline__part__segment-end', {
-							'is-next':
-								this.state.isLive &&
-								((!this.props.isLastSegment && !this.props.isLastInSegment) ||
-									!!this.props.playlist.nextPartInstanceId),
+							'is-next': isNext,
 						})}
 					>
 						<div className="segment-timeline__part__segment-end__label">
@@ -506,14 +526,15 @@ export class SegmentTimelinePartClass extends React.Component<Translated<WithTim
 						</div>
 					</div>
 				)}
-				{isEndOfShow && !this.props.playlist.loop && (
-					<div className="segment-timeline__part__show-end">
-						<div className="segment-timeline__part__show-end__label">{t('Show End')}</div>
-					</div>
-				)}
-				{isEndOfShow && this.props.playlist.loop && (
-					<div className="segment-timeline__part__show-end loop">
-						<div className="segment-timeline__part__show-end__label">{t('Loops to top')}</div>
+				{isEndOfShow && (
+					<div
+						className={ClassNames('segment-timeline__part__show-end', {
+							loop: this.props.playlist.loop,
+						})}
+					>
+						<div className="segment-timeline__part__show-end__label">
+							{this.props.playlist.loop ? t('Loops to top') : t('Show End')}
+						</div>
 					</div>
 				)}
 			</>
@@ -552,20 +573,24 @@ export class SegmentTimelinePartClass extends React.Component<Translated<WithTim
 			}
 		}
 
-		if (this.state.isInsideViewport && (!this.state.isTooSmallForDisplay || this.state.isLive || this.state.isNext)) {
+		if (
+			this.state.isInsideViewport &&
+			(!this.state.isTooSmallForDisplay || this.state.isLive || this.state.isNext || this.props.isBudgetGap)
+		) {
 			return (
 				<div
 					className={ClassNames(
 						'segment-timeline__part',
 						{
 							live: this.state.isLive,
-							next: this.state.isNext || this.props.isAfterLastValidInSegmentAndItsLive,
+							next: (this.state.isNext || this.props.isAfterLastValidInSegmentAndItsLive) && !innerPart.invalid,
 							invalid: innerPart.invalid && !innerPart.gap,
 							floated: innerPart.floated,
 							gap: innerPart.gap,
 							'invert-flash': this.state.highlight,
 
 							'duration-settling': this.state.isDurationSettling,
+							'budget-gap': this.props.isBudgetGap,
 						},
 						this.props.className
 					)}
@@ -576,38 +601,41 @@ export class SegmentTimelinePartClass extends React.Component<Translated<WithTim
 					{innerPart.invalid ? <div className="segment-timeline__part__invalid-cover"></div> : null}
 					{innerPart.floated ? <div className="segment-timeline__part__floated-cover"></div> : null}
 
-					<div
-						className={ClassNames('segment-timeline__part__nextline', {
-							// This is the base, basic line
-							'auto-next':
-								(this.state.isNext && this.props.autoNextPart) ||
-								(!this.state.isNext && this.props.part.willProbablyAutoNext),
-							invalid: innerPart.invalid && !innerPart.gap,
-							floated: innerPart.floated,
-							offset: !!this.props.playlist.nextTimeOffset,
-						})}
-					>
+					{!this.props.isBudgetGap && (
 						<div
-							className={ClassNames('segment-timeline__part__nextline__label', {
-								'segment-timeline__part__nextline__label--thin':
-									(this.props.autoNextPart || this.props.part.willProbablyAutoNext) && !this.state.isNext,
+							className={ClassNames('segment-timeline__part__nextline', {
+								// This is the base, basic line
+								'auto-next':
+									(this.state.isNext && this.props.autoNextPart) ||
+									(!this.state.isNext && this.props.part.willProbablyAutoNext),
+								invalid: innerPart.invalid && !innerPart.gap,
+								floated: innerPart.floated,
+								offset: !!this.props.playlist.nextTimeOffset,
 							})}
 						>
-							{innerPart.invalid && !innerPart.gap ? null : (
-								<React.Fragment>
-									{((this.state.isNext && this.props.autoNextPart) ||
-										(!this.state.isNext && this.props.part.willProbablyAutoNext)) &&
-										t('Auto') + ' '}
-									{(this.state.isNext || this.props.isAfterLastValidInSegmentAndItsLive) && t('Next')}
-								</React.Fragment>
+							<div
+								className={ClassNames('segment-timeline__part__nextline__label', {
+									'segment-timeline__part__nextline__label--thin':
+										(this.props.autoNextPart || this.props.part.willProbablyAutoNext) && !this.state.isNext,
+								})}
+							>
+								{innerPart.invalid && !innerPart.gap ? null : (
+									<React.Fragment>
+										{((this.state.isNext && this.props.autoNextPart) ||
+											(!this.state.isNext && this.props.part.willProbablyAutoNext)) &&
+											t('Auto') + ' '}
+										{(this.state.isNext || this.props.isAfterLastValidInSegmentAndItsLive) && t('Next')}
+									</React.Fragment>
+								)}
+								{this.props.isAfterLastValidInSegmentAndItsLive && !this.props.playlist.loop && CARRIAGE_RETURN_ICON}
+								{this.props.isAfterLastValidInSegmentAndItsLive && this.props.playlist.loop && <LoopingIcon />}
+							</div>
+							{(!this.props.relative || this.props.isPreview) && this.props.part.instance.part.identifier && (
+								<div className="segment-timeline__identifier">{this.props.part.instance.part.identifier}</div>
 							)}
-							{this.props.isAfterLastValidInSegmentAndItsLive && !this.props.playlist.loop && CARRIAGE_RETURN_ICON}
-							{this.props.isAfterLastValidInSegmentAndItsLive && this.props.playlist.loop && <LoopingIcon />}
 						</div>
-						{(!this.props.relative || this.props.isPreview) && this.props.part.instance.part.identifier && (
-							<div className="segment-timeline__identifier">{this.props.part.instance.part.identifier}</div>
-						)}
-					</div>
+					)}
+
 					{this.props.playlist.nextTimeOffset &&
 						this.state.isNext && ( // This is the off-set line
 							<div
@@ -694,7 +722,8 @@ export class SegmentTimelinePartClass extends React.Component<Translated<WithTim
 export const SegmentTimelinePart = withTranslation()(
 	withTiming<IProps & WithTranslation, IState>((props: IProps) => {
 		return {
-			isHighResolution: false,
+			tickResolution: TimingTickResolution.Synced,
+			dataResolution: TimingDataResolution.High,
 			filter: (durations: RundownTimingContext) => {
 				durations = durations || {}
 

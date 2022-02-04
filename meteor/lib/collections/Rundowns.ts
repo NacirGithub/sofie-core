@@ -56,6 +56,12 @@ export interface DBRundown
 	status?: string
 	// There should be something like a Owner user here somewhere?
 
+	/** The id of the Next Segment. If set, the Next point will jump to that segment when moving out of currently playing segment. */
+	nextSegmentId?: string
+
+	/** Actual time of playback starting */
+	startedPlayback?: Time
+
 	/** Is the rundown in an unsynced (has been unpublished from ENPS) state? */
 	orphaned?: 'deleted' | 'from-snapshot' | 'manual'
 
@@ -67,6 +73,8 @@ export interface DBRundown
 
 	/** External id of the Rundown Playlist to put this rundown in */
 	playlistExternalId?: string
+	/** Whether the end of the rundown marks a commercial break */
+	endOfRundownIsShowBreak?: boolean
 	/** Name (user-facing) of the external NCS this rundown came from */
 	externalNRCSName: string
 	/** The id of the Rundown Playlist this rundown is in */

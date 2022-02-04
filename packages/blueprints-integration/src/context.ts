@@ -6,10 +6,10 @@ import {
 	IBlueprintPiece,
 	IBlueprintPieceInstance,
 	IBlueprintResolvedPieceInstance,
-	IBlueprintRundownDB,
 	IBlueprintMutatablePart,
 	IBlueprintSegmentDB,
 	IBlueprintPieceDB,
+	IBlueprintSegmentRundown,
 } from './rundown'
 import { BlueprintMappings } from './studio'
 import { OnGenerateTimelineObj } from './timeline'
@@ -93,6 +93,7 @@ export interface IPackageInfoContext {
 	 * eg, baseline packages can be accessed when generating the baseline objects, piece/adlib packages can be access when regenerating the segment they are from
 	 */
 	getPackageInfo: (packageId: string) => Readonly<PackageInfo.Any[]>
+	hackGetMediaObjectDuration: (mediaId: string) => number | undefined
 }
 
 export interface IStudioBaselineContext extends IStudioContext, IPackageInfoContext {}
@@ -114,7 +115,7 @@ export interface IShowStyleUserContext extends IUserNotesContext, IShowStyleCont
 
 export interface IRundownContext extends IShowStyleContext {
 	readonly rundownId: string
-	readonly rundown: Readonly<IBlueprintRundownDB>
+	readonly rundown: Readonly<IBlueprintSegmentRundown>
 }
 
 export interface IRundownUserContext extends IUserNotesContext, IRundownContext {}
@@ -224,6 +225,10 @@ export interface ISyncIngestUpdateToPartInstanceContext extends IRundownUserCont
 	updatePartInstance(props: Partial<IBlueprintMutatablePart>): IBlueprintPartInstance
 }
 
+export interface IRemoveOrphanedPartInstanceContext extends IRundownUserContext {
+	removePartInstance(): void
+}
+
 /** Events */
 
 export interface IEventContext {
@@ -266,9 +271,8 @@ export interface IRundownTimingEventContext extends IRundownDataChangedEventCont
 	/**
 	 * Returns the first PartInstance in the Rundown within the current playlist activation.
 	 * This allows for a start time for the Rundown to be determined
-	 * @param allowUntimed Whether to consider a Part which has the untimed property set
 	 */
-	getFirstPartInstanceInRundown(allowUntimed?: boolean): Readonly<IBlueprintPartInstance>
+	getFirstPartInstanceInRundown(): Readonly<IBlueprintPartInstance>
 
 	/**
 	 * Returns the partInstances in the Segment, limited to the playthrough of the segment that refPartInstance is part of

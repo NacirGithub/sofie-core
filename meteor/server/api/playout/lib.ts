@@ -20,7 +20,7 @@ import {
 	getPieceInstancesForPart,
 	syncPlayheadInfinitesForNextPartInstance,
 } from './infinites'
-import { Segment, DBSegment, SegmentId } from '../../../lib/collections/Segments'
+import { Segment, DBSegment, SegmentId, SegmentOrphanedReason } from '../../../lib/collections/Segments'
 import { RundownPlaylist } from '../../../lib/collections/RundownPlaylists'
 import { PartInstance, DBPartInstance, PartInstanceId, SegmentPlayoutId } from '../../../lib/collections/PartInstances'
 import { TSR } from '@sofie-automation/blueprints-integration'
@@ -35,6 +35,7 @@ import {
 } from './cache'
 import { Settings } from '../../../lib/Settings'
 import { runIngestOperationWithCache, UpdateIngestRundownAction } from '../ingest/lockFunction'
+import { PieceInstances } from '../../../lib/collections/PieceInstances'
 
 export const LOW_PRIO_DEFER_TIME = 40 // ms
 
@@ -47,18 +48,29 @@ export async function resetRundownPlaylist(cache: CacheForPlayout): Promise<void
 	// Remove all dunamically inserted pieces (adlibs etc)
 	// const rundownIds = new Set(getRundownIDsFromCache(cache))
 
-	const partInstancesToRemove = new Set(cache.PartInstances.remove((p) => p.rehearsal))
-	cache.PieceInstances.remove((p) => partInstancesToRemove.has(p.partInstanceId))
-
-	cache.PartInstances.update((p) => !p.reset, {
+	const partInstancesToRemove = cache.PartInstances.remove((p) => p.rehearsal)
+	cache.deferAfterSave(() => {
+		PieceInstances.remove({
+			partInstanceId: { $in: partInstancesToRemove },
+		})
+	})
+	const partInstancesToReset = cache.PartInstances.update((p) => !p.reset, {
 		$set: {
 			reset: true,
 		},
 	})
-	cache.PieceInstances.update((p) => !p.reset, {
-		$set: {
-			reset: true,
-		},
+	cache.deferAfterSave(() => {
+		PieceInstances.update(
+			{
+				partInstanceId: { $in: partInstancesToReset },
+			},
+			{
+				$set: {
+					reset: true,
+				},
+			},
+			{ multi: true }
+		)
 	})
 
 	cache.Playlist.update({
@@ -245,10 +257,20 @@ export async function setNextPart(
 		let newInstanceId: PartInstanceId
 		if (newNextPartInstance) {
 			newInstanceId = newNextPartInstance._id
+			cache.PartInstances.update(newInstanceId, {
+				$set: {
+					consumesNextSegmentId: newNextPart?.consumesNextSegmentId,
+				},
+			})
 			await syncPlayheadInfinitesForNextPartInstance(cache)
 		} else if (nextPartInstance && nextPartInstance.part._id === nextPart._id) {
 			// Re-use existing
 			newInstanceId = nextPartInstance._id
+			cache.PartInstances.update(newInstanceId, {
+				$set: {
+					consumesNextSegmentId: newNextPart?.consumesNextSegmentId,
+				},
+			})
 			await syncPlayheadInfinitesForNextPartInstance(cache)
 		} else {
 			// Create new isntance
@@ -298,7 +320,7 @@ export async function setNextPart(
 			cache.Playlist.doc.previousPartInstanceId,
 		])
 		// reset any previous instances of this part
-		cache.PartInstances.update(
+		const partInstancesToReset = cache.PartInstances.update(
 			{
 				_id: { $nin: selectedPartInstanceIds },
 				rundownId: nextPart.rundownId,
@@ -311,19 +333,21 @@ export async function setNextPart(
 				},
 			}
 		)
-		cache.PieceInstances.update(
-			{
-				partInstanceId: { $nin: selectedPartInstanceIds },
-				rundownId: nextPart.rundownId,
-				'piece.startPartId': nextPart._id,
-				reset: { $ne: true },
-			},
-			{
-				$set: {
-					reset: true,
+		cache.deferAfterSave(() => {
+			PieceInstances.update(
+				{
+					partInstanceId: { $in: partInstancesToReset },
+					'piece.startPartId': nextPart._id,
+					reset: { $ne: true },
 				},
-			}
-		)
+				{
+					$set: {
+						reset: true,
+					},
+				},
+				{ multi: true }
+			)
+		})
 
 		cache.Playlist.update({
 			$set: literal<Partial<RundownPlaylist>>({
@@ -496,7 +520,8 @@ function cleanupOrphanedItems(cache: CacheForPlayout) {
 							// Find the segments that are still orphaned (in case they have resynced before this executes)
 							// We flag them for deletion again, and they will either be kept if they are somehow playing, or purged if they are not
 							const stillOrphanedSegments = ingestCache.Segments.findFetch(
-								(s) => s.orphaned === 'deleted' && candidateSegmentIds.includes(s._id)
+								(s) =>
+									s.orphaned === SegmentOrphanedReason.DELETED && candidateSegmentIds.includes(s._id)
 							)
 
 							return {

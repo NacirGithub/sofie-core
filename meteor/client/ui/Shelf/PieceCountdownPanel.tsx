@@ -7,7 +7,7 @@ import {
 	DashboardLayoutPieceCountdown,
 } from '../../../lib/collections/RundownLayouts'
 import { RundownLayoutsAPI } from '../../../lib/api/rundownLayouts'
-import { dashboardElementPosition, getUnfinishedPieceInstancesReactive } from './DashboardPanel'
+import { dashboardElementPosition } from './DashboardPanel'
 import { withTracker } from '../../lib/ReactMeteorData/ReactMeteorData'
 import { MeteorReactComponent } from '../../lib/MeteorReactComponent'
 import { RundownUtils } from '../../lib/rundown'
@@ -15,6 +15,7 @@ import { RundownTiming, TimingEvent } from '../RundownView/RundownTiming/Rundown
 import { RundownPlaylist } from '../../../lib/collections/RundownPlaylists'
 import { PieceInstance } from '../../../lib/collections/PieceInstances'
 import { VTContent } from '@sofie-automation/blueprints-integration'
+import { getUnfinishedPieceInstancesReactive } from '../../lib/rundownLayouts'
 import { DBShowStyleBase } from '../../../lib/collections/ShowStyleBases'
 interface IPieceCountdownPanelProps {
 	visible?: boolean
@@ -45,11 +46,11 @@ export class PieceCountdownPanelInner extends MeteorReactComponent<
 	}
 
 	componentDidMount() {
-		window.addEventListener(RundownTiming.Events.timeupdate, this.updateTimecode)
+		window.addEventListener(RundownTiming.Events.timeupdateLowResolution, this.updateTimecode)
 	}
 
 	componentWillUnmount() {
-		window.removeEventListener(RundownTiming.Events.timeupdate, this.updateTimecode)
+		window.removeEventListener(RundownTiming.Events.timeupdateLowResolution, this.updateTimecode)
 	}
 
 	updateTimecode(e: TimingEvent) {
@@ -76,9 +77,7 @@ export class PieceCountdownPanelInner extends MeteorReactComponent<
 			<div
 				className="piece-countdown-panel"
 				style={_.extend(
-					isDashboardLayout
-						? dashboardElementPosition({ ...(this.props.panel as DashboardLayoutPieceCountdown), height: 1 })
-						: {},
+					isDashboardLayout ? dashboardElementPosition({ ...(this.props.panel as DashboardLayoutPieceCountdown) }) : {},
 					{
 						visibility: this.props.visible ? 'visible' : 'hidden',
 					}

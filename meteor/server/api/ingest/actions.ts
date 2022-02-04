@@ -21,7 +21,7 @@ import { removeRundownsFromDb } from '../rundownPlaylist'
 import { VerifiedRundownPlaylistContentAccess } from '../lib'
 
 /*
-This file contains actions that can be performed on an ingest-device (MOS-device)
+This file contains actions that can be performed on an ingest-device
 */
 export namespace IngestActions {
 	/**

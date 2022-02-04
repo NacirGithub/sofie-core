@@ -113,6 +113,13 @@ export interface IBlueprintRundownDBData {
 	airStatus?: string
 }
 
+export interface IBlueprintSegmentRundown<TMetadata = unknown> {
+	externalId: string
+
+	/** Arbitrary data storage for plugins */
+	metaData?: TMetadata
+}
+
 /** The Segment generated from Blueprint */
 export interface IBlueprintSegment<TMetadata = unknown> {
 	/** User-presentable name (Slug) for the Title */
@@ -123,6 +130,8 @@ export interface IBlueprintSegment<TMetadata = unknown> {
 	isHidden?: boolean
 	/** User-facing identifier that can be used by the User to identify the contents of a segment in the Rundown source system */
 	identifier?: string
+	/** Show the minishelf of the segment */
+	showShelf?: boolean
 }
 /** The Segment sent from Core */
 export interface IBlueprintSegmentDB<TMetadata = unknown> extends IBlueprintSegment<TMetadata> {
@@ -153,6 +162,9 @@ export interface IBlueprintMutatablePart<TMetadata = unknown> {
 	/** Expected duration of the line, in milliseconds */
 	expectedDuration?: number
 
+	/** Budget duration of this part, in milliseconds */
+	budgetDuration?: number
+
 	/** Whether this segment line supports being used in HOLD */
 	holdMode?: PartHoldMode
 
@@ -169,7 +181,16 @@ export interface IBlueprintMutatablePart<TMetadata = unknown> {
 
 	/** User-facing identifier that can be used by the User to identify the contents of a segment in the Rundown source system */
 	identifier?: string
+
+	/** MediaObjects that when created/updated, should cause the blueprint to be rerun for the Segment of this Part */
+	hackListenToMediaObjectUpdates?: HackPartMediaObjectSubscription[]
 }
+
+export interface HackPartMediaObjectSubscription {
+	/** The playable reference (CasparCG clip name, quantel GUID, etc) */
+	mediaId: string
+}
+
 /** The Part generated from Blueprint */
 export interface IBlueprintPart<TMetadata = unknown> extends IBlueprintMutatablePart<TMetadata> {
 	/** Id of the part from the gateway if this part does not map directly to an IngestPart. This must be unique for each part */
@@ -343,6 +364,8 @@ export interface IBlueprintPieceGeneric<TMetadata = unknown> {
 	adlibAutoNextOverlap?: number
 	/** When queued, block transition at the end of the part */
 	adlibDisableOutTransition?: boolean
+	/** When queued, how long to keep the old part alive */
+	adlibTransitionKeepAlive?: number
 	/** User-defined tags that can be used for filtering adlibs in the shelf and identifying pieces by actions */
 	tags?: string[]
 
@@ -441,6 +464,10 @@ export interface IBlueprintAdLibPiece<TMetadata = unknown> extends IBlueprintPie
 	nextPieceTags?: string[]
 	/** String that can be used to identify adlibs that are equivalent to each other */
 	uniquenessId?: string
+	/** When not playing, display in the UI as playing, and vice versa. Useful for Adlibs that toggle something off when taken */
+	invertOnAirState?: boolean
+	/** Do not assign a hotkey to this adlib */
+	noHotKey?: boolean
 }
 /** The AdLib piece sent from Core */
 export interface IBlueprintAdLibPieceDB<TMetadata = unknown> extends IBlueprintAdLibPiece<TMetadata> {

@@ -31,19 +31,26 @@ import RundownViewEventBus, {
 } from '../RundownView/RundownViewEventBus'
 import { IAdLibListItem } from './AdLibListItem'
 import ShelfContextMenu from './ShelfContextMenu'
+import { doUserAction, UserAction } from '../../lib/userAction'
+import { MeteorCall } from '../../../lib/api/methods'
+import { Rundown } from '../../../lib/collections/Rundowns'
+import { ShowStyleVariant } from '../../../lib/collections/ShowStyleVariants'
 
 export enum ShelfTabs {
 	ADLIB = 'adlib',
 	ADLIB_LAYOUT_FILTER = 'adlib_layout_filter',
 	GLOBAL_ADLIB = 'global_adlib',
 	SYSTEM_HOTKEYS = 'system_hotkeys',
+	KEYBOARD = 'keyboard_preview',
 }
 export interface IShelfProps extends React.ComponentPropsWithRef<any> {
 	isExpanded: boolean
 	buckets: Array<Bucket>
 	playlist: RundownPlaylist
+	currentRundown: Rundown
 	studio: Studio
 	showStyleBase: ShowStyleBase
+	showStyleVariant: ShowStyleVariant
 	studioMode: boolean
 	hotkeys: Array<{
 		key: string
@@ -57,6 +64,7 @@ export interface IShelfProps extends React.ComponentPropsWithRef<any> {
 		inspector: boolean
 	}
 	bucketDisplayFilter: number[] | undefined
+	showBuckets: boolean
 
 	onChangeExpanded: (value: boolean) => void
 	onRegisterHotkeys: (
@@ -119,6 +127,13 @@ export class ShelfBase extends React.Component<Translated<IShelfProps>, IState> 
 			shouldQueue: false,
 			selectedPiece: undefined,
 			localStorageName,
+		}
+	}
+
+	take = (e: any) => {
+		const { t } = this.props
+		if (this.props.studioMode) {
+			doUserAction(t, e, UserAction.TAKE, (e) => MeteorCall.userAction.take(e, this.props.playlist._id))
 		}
 	}
 
@@ -376,7 +391,7 @@ export class ShelfBase extends React.Component<Translated<IShelfProps>, IState> 
 				style={fullViewport ? undefined : this.getStyle()}
 				ref={this.setRef}
 			>
-				<ShelfContextMenu />
+				{!this.props.rundownLayout?.disableContextMenu && <ShelfContextMenu />}
 				{!fullViewport && (
 					<div
 						className="rundown-view__shelf__handle dark"
@@ -414,6 +429,7 @@ export class ShelfBase extends React.Component<Translated<IShelfProps>, IState> 
 									<ShelfDashboardLayout
 										playlist={this.props.playlist}
 										showStyleBase={this.props.showStyleBase}
+										showStyleVariant={this.props.showStyleVariant}
 										// buckets={this.props.buckets}
 										studioMode={this.props.studioMode}
 										rundownLayout={this.props.rundownLayout}
@@ -441,6 +457,7 @@ export class ShelfBase extends React.Component<Translated<IShelfProps>, IState> 
 							</ErrorBoundary>
 						</ContextMenuTrigger>
 					) : null}
+
 					{shelfDisplayOptions.buckets ? (
 						<ErrorBoundary>
 							<RundownViewBuckets

@@ -1,5 +1,7 @@
+import { BlueprintResultRundown } from '@sofie-automation/blueprints-integration'
 import { Meteor } from 'meteor/meteor'
 import { Random } from 'meteor/random'
+import { ReadonlyDeep } from 'type-fest'
 import _ from 'underscore'
 import { SegmentNote, PartNote, RundownNote } from '../../../lib/api/notes'
 import { AdLibAction } from '../../../lib/collections/AdLibActions'
@@ -11,11 +13,10 @@ import { Piece } from '../../../lib/collections/Pieces'
 import { RundownBaselineAdLibAction } from '../../../lib/collections/RundownBaselineAdLibActions'
 import { RundownBaselineAdLibItem } from '../../../lib/collections/RundownBaselineAdLibPieces'
 import { RundownBaselineObj, RundownBaselineObjId } from '../../../lib/collections/RundownBaselineObjs'
-import { DBRundown } from '../../../lib/collections/Rundowns'
-import { DBSegment, SegmentId } from '../../../lib/collections/Segments'
+import { DBRundown, Rundown } from '../../../lib/collections/Rundowns'
+import { DBSegment, SegmentId, SegmentOrphanedReason } from '../../../lib/collections/Segments'
 import { ShowStyleCompound } from '../../../lib/collections/ShowStyleVariants'
 import { getCurrentTime, literal, protectString, unprotectString } from '../../../lib/lib'
-import { Settings } from '../../../lib/Settings'
 import { logChanges, saveIntoCache } from '../../cache/lib'
 import { PackageInfo } from '../../coreSystem'
 import { sumChanges, anythingChanged } from '../../lib/database'
@@ -31,7 +32,7 @@ import {
 	postProcessGlobalAdLibActions,
 } from '../blueprints/postProcess'
 import { profiler } from '../profiler'
-import { selectShowStyleVariant } from '../rundown'
+import { SelectedShowStyleVariant, selectShowStyleVariant } from '../rundown'
 import { getShowStyleCompoundForRundown } from '../showStyles'
 import { CacheForIngest } from './cache'
 import { updateBaselineExpectedPackagesOnRundown } from './expectedPackages'
@@ -206,11 +207,6 @@ export async function calculateSegmentsFromIngestData(
 				})
 				res.parts.push(part)
 
-				// This ensures that it doesn't accidently get played while hidden
-				if (blueprintRes.segment.isHidden) {
-					part.invalid = true
-				}
-
 				// Update pieces
 				res.pieces.push(
 					...postProcessPieces(
@@ -245,9 +241,54 @@ export async function calculateSegmentsFromIngestData(
 				)
 			})
 
-			// If the segment has no parts, then hide it
-			if (blueprintRes.parts.length === 0) {
-				newSegment.isHidden = true
+			const orphanedDeletedSegments = cache.Segments.findFetch({
+				orphaned: SegmentOrphanedReason.DELETED,
+				rundownId: newSegment.rundownId,
+			})
+			if (orphanedDeletedSegments.length) {
+				const allSegmentsByRank = cache.Segments.findFetch(
+					{ rundownId: newSegment.rundownId },
+					{ sort: { _rank: -1 } }
+				)
+				// Rank padding
+				const rankPad = 0.0001
+				for (const orphanedSegment of orphanedDeletedSegments) {
+					const removedInd = allSegmentsByRank.findIndex((s) => s._id === orphanedSegment._id)
+					let newRank = Number.MIN_SAFE_INTEGER
+					const previousSegment = allSegmentsByRank[removedInd + 1]
+					const nextSegment = allSegmentsByRank[removedInd - 1]
+					const previousPreviousSegment = allSegmentsByRank[removedInd + 2]
+
+					if (previousSegment) {
+						newRank = previousSegment._rank + rankPad
+						if (previousSegment._id === segmentId) {
+							if (previousSegment._rank > newSegment._rank) {
+								// Moved previous segment up: follow it
+								newRank = newSegment._rank + rankPad
+							} else if (previousSegment._rank < newSegment._rank && previousPreviousSegment) {
+								// Moved previous segment down: stay behind more previous
+								newRank = previousPreviousSegment._rank + rankPad
+							}
+						} else if (
+							nextSegment &&
+							nextSegment._id === segmentId &&
+							nextSegment._rank > newSegment._rank
+						) {
+							// Next segment was moved uo
+							if (previousPreviousSegment) {
+								if (previousPreviousSegment._rank < newSegment._rank) {
+									// Swapped segments directly before and after
+									// Will always result in both going below the unsynced
+									// Will also affect multiple segents moved directly above the previous
+									newRank = previousPreviousSegment._rank + rankPad
+								}
+							} else {
+								newRank = Number.MIN_SAFE_INTEGER
+							}
+						}
+					}
+					cache.Segments.update({ _id: orphanedSegment._id }, { $set: { _rank: newRank } })
+				}
 			}
 		}
 
@@ -439,6 +480,55 @@ export async function updateRundownFromIngestData(
 	const showStyleBlueprint = await loadShowStyleBlueprint(showStyle.base)
 	const allRundownWatchedPackages = await pAllRundownWatchedPackages
 
+	// Call blueprints, get rundown
+	const { dbRundownData, rundownRes } = await getRundownFromIngestData(
+		cache,
+		ingestRundown,
+		peripheralDevice,
+		showStyle,
+		showStyleBlueprint,
+		allRundownWatchedPackages
+	)
+
+	// Save rundown and baseline
+	const dbRundown = await saveChangesForRundown(cache, dbRundownData, rundownRes, showStyle)
+
+	// TODO - store notes from rundownNotesContext
+
+	const { segmentChanges, removedSegments } = await resolveSegmentChangesForUpdatedRundown(
+		cache,
+		ingestRundown,
+		allRundownWatchedPackages
+	)
+
+	updateBaselineExpectedPackagesOnRundown(cache, rundownRes.baseline)
+
+	saveSegmentChangesToCache(cache, segmentChanges, true)
+
+	logger.info(`Rundown ${dbRundown._id} update complete`)
+
+	span?.end()
+	return literal<CommitIngestData>({
+		changedSegmentIds: segmentChanges.segments.map((s) => s._id),
+		removedSegmentIds: removedSegments.map((s) => s._id),
+		renamedSegments: new Map(),
+
+		removeRundown: false,
+
+		showStyle: showStyle.compound,
+		blueprint: showStyleBlueprint,
+	})
+}
+export async function getRundownFromIngestData(
+	cache: CacheForIngest,
+	ingestRundown: LocalIngestRundown,
+	peripheralDevice: PeripheralDevice | undefined,
+	showStyle: SelectedShowStyleVariant,
+	showStyleBlueprint: WrappedShowStyleBlueprint,
+	allRundownWatchedPackages: WatchedPackagesHelper
+): Promise<{ dbRundownData: DBRundown; rundownRes: BlueprintResultRundown }> {
+	const extendedIngestRundown = extendIngestRundownCore(ingestRundown, cache.Rundown.doc)
+
 	const rundownBaselinePackages = allRundownWatchedPackages.filter(
 		(pkg) =>
 			pkg.fromPieceType === ExpectedPackageDBType.BASELINE_ADLIB_ACTION ||
@@ -514,6 +604,16 @@ export async function updateRundownFromIngestData(
 			? _.pick(cache.Rundown.doc, 'playlistId', '_rank', 'baselineModifyHash', 'airStatus', 'status')
 			: {}),
 	})
+
+	return { dbRundownData, rundownRes }
+}
+
+export async function saveChangesForRundown(
+	cache: CacheForIngest,
+	dbRundownData: DBRundown,
+	rundownRes: BlueprintResultRundown,
+	showStyle: SelectedShowStyleVariant
+): Promise<ReadonlyDeep<Rundown>> {
 	const dbRundown = cache.Rundown.replace(dbRundownData)
 
 	// Save the baseline
@@ -571,8 +671,14 @@ export async function updateRundownFromIngestData(
 		})
 	}
 
-	// TODO - store notes from rundownNotesContext
+	return dbRundown
+}
 
+export async function resolveSegmentChangesForUpdatedRundown(
+	cache: CacheForIngest,
+	ingestRundown: LocalIngestRundown,
+	allRundownWatchedPackages: WatchedPackagesHelper
+): Promise<{ segmentChanges: UpdateSegmentsResult; removedSegments: DBSegment[] }> {
 	const segmentChanges = await calculateSegmentsFromIngestData(
 		cache,
 		ingestRundown.segments,
@@ -584,38 +690,9 @@ export async function updateRundownFromIngestData(
 	for (const oldSegment of removedSegments) {
 		segmentChanges.segments.push({
 			...oldSegment,
-			orphaned: 'deleted',
+			orphaned: SegmentOrphanedReason.DELETED,
 		})
 	}
 
-	if (Settings.preserveUnsyncedPlayingSegmentContents && removedSegments.length > 0) {
-		// Preserve any old content, unless the part is referenced in another segment
-		const retainSegments = new Set(removedSegments.map((s) => s._id))
-		const newPartIds = new Set(segmentChanges.parts.map((p) => p._id))
-		const oldParts = cache.Parts.findFetch((p) => retainSegments.has(p.segmentId) && !newPartIds.has(p._id))
-		segmentChanges.parts.push(...oldParts)
-
-		const oldPartIds = new Set(oldParts.map((p) => p._id))
-		segmentChanges.pieces.push(...cache.Pieces.findFetch((p) => oldPartIds.has(p.startPartId)))
-		segmentChanges.adlibPieces.push(...cache.AdLibPieces.findFetch((p) => p.partId && oldPartIds.has(p.partId)))
-		segmentChanges.adlibActions.push(...cache.AdLibActions.findFetch((p) => p.partId && oldPartIds.has(p.partId)))
-	}
-
-	updateBaselineExpectedPackagesOnRundown(cache, rundownRes.baseline)
-
-	saveSegmentChangesToCache(cache, segmentChanges, true)
-
-	logger.info(`Rundown ${dbRundown._id} update complete`)
-
-	span?.end()
-	return literal<CommitIngestData>({
-		changedSegmentIds: segmentChanges.segments.map((s) => s._id),
-		removedSegmentIds: removedSegments.map((s) => s._id),
-		renamedSegments: new Map(),
-
-		removeRundown: false,
-
-		showStyle: showStyle.compound,
-		blueprint: showStyleBlueprint,
-	})
+	return { segmentChanges, removedSegments }
 }

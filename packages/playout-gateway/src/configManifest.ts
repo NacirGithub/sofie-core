@@ -76,6 +76,11 @@ const PLAYOUT_SUBDEVICE_CONFIG: ImplementedSubDeviceConfig = {
 			name: 'Frame rate',
 			type: ConfigManifestEntryType.NUMBER,
 		},
+		{
+			id: 'options.retryInterval',
+			name: 'Media retry interval (ms), -1 disables, 0 default',
+			type: ConfigManifestEntryType.INT,
+		},
 	],
 	[TSRDeviceType.ATEM]: [
 		...PLAYOUT_SUBDEVICE_COMMON,
@@ -456,6 +461,8 @@ type NoMappingSettingsDeviceTypes =
 	| TSRDeviceType.VIZMSE
 	| TSRDeviceType.SHOTOKU
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
 type ImplementedMappingsManifest = Pick<MappingsManifest, Exclude<TSRDeviceType, NoMappingSettingsDeviceTypes>>
 
 const MAPPING_MANIFEST: ImplementedMappingsManifest = {

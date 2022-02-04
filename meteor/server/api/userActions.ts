@@ -165,28 +165,6 @@ export async function setNextSegment(
 	if (nextSegmentId) {
 		nextSegment = (await Segments.findOneAsync(nextSegmentId)) || null
 		if (!nextSegment) throw new Meteor.Error(404, `Segment "${nextSegmentId}" not found!`)
-
-		const rundownIds = playlist.getRundownIDs()
-		if (rundownIds.indexOf(nextSegment.rundownId) === -1) {
-			throw new Meteor.Error(
-				404,
-				`Segment "${nextSegmentId}" does not belong to Rundown Playlist "${rundownPlaylistId}"!`
-			)
-		}
-
-		const partsInSegment = await Parts.findFetchAsync({
-			rundownId: nextSegment.rundownId,
-			segmentId: nextSegment._id,
-		})
-		const firstValidPartInSegment = partsInSegment.find((p) => p.isPlayable())
-
-		if (!firstValidPartInSegment) return ClientAPI.responseError('Segment contains no valid parts')
-
-		const { currentPartInstance, nextPartInstance } = playlist.getSelectedPartInstances()
-		if (!currentPartInstance || !nextPartInstance || nextPartInstance.segmentId !== currentPartInstance.segmentId) {
-			// Special: in this case, the user probably dosen't want to setNextSegment, but rather just setNextPart
-			return ServerPlayoutAPI.setNextPart(access, rundownPlaylistId, firstValidPartInSegment._id, true, 0)
-		}
 	}
 
 	return ServerPlayoutAPI.setNextSegment(access, rundownPlaylistId, nextSegmentId)
@@ -460,7 +438,7 @@ export async function executeAction(
 	actionId: string,
 	userData: any,
 	triggerMode?: string
-): Promise<ClientAPI.ClientResponse<void>> {
+): Promise<ClientAPI.ClientResponse<{ queuedPartInstanceId?: PartInstanceId; taken?: boolean }>> {
 	check(rundownPlaylistId, String)
 	check(actionDocId, String)
 	check(actionId, String)
@@ -613,9 +591,10 @@ export function userSaveEvaluation(context: MethodContext, evaluation: Evaluatio
 export async function userStoreRundownSnapshot(
 	context: MethodContext,
 	playlistId: RundownPlaylistId,
-	reason: string
+	reason: string,
+	full?: boolean
 ): Promise<ClientAPI.ClientResponse<SnapshotId>> {
-	return ClientAPI.responseSuccess(await storeRundownPlaylistSnapshot(context, playlistId, reason))
+	return ClientAPI.responseSuccess(await storeRundownPlaylistSnapshot(context, playlistId, reason, full))
 }
 export async function removeRundownPlaylist(context: MethodContext, playlistId: RundownPlaylistId) {
 	const playlist = checkAccessAndGetPlaylist(context, playlistId)
@@ -637,6 +616,7 @@ export function resyncRundown(context: MethodContext, rundownId: RundownId) {
 
 	return ClientAPI.responseSuccess(ServerRundownAPI.resyncRundown(context, rundown._id))
 }
+
 export function mediaRestartWorkflow(context: MethodContext, workflowId: MediaWorkFlowId) {
 	return ClientAPI.responseSuccess(MediaManagerAPI.restartWorkflow(context, workflowId))
 }
@@ -1114,13 +1094,14 @@ class ServerUserActionAPI extends MethodContextAPI implements NewUserActionAPI {
 	async saveEvaluation(_userEvent: string, evaluation: EvaluationBase) {
 		return makePromise(() => userSaveEvaluation(this, evaluation))
 	}
-	async storeRundownSnapshot(_userEvent: string, playlistId: RundownPlaylistId, reason: string) {
+	async storeRundownSnapshot(_userEvent: string, playlistId: RundownPlaylistId, reason: string, full?: boolean) {
 		return traceAction(
 			UserActionAPIMethods.storeRundownSnapshot,
 			userStoreRundownSnapshot,
 			this,
 			playlistId,
-			reason
+			reason,
+			full
 		)
 	}
 	async removeRundownPlaylist(_userEvent: string, playlistId: RundownPlaylistId) {
