@@ -297,11 +297,12 @@ $part-right-padding: 5px;
 		bottom: 0;
 		left: 0;
 		z-index: -1;
-		padding: 0 10px 0 12px;
+		padding: 0 10px 0 0;
 		box-sizing: border-box;
 		background-color: $part-identifier;
 		border-radius: 0 10px 10px 0;
 		color: $part-identifier-text;
+		font-size: 0.85em;
 	}
 
 	> .segment-storyboard__part-timer {
