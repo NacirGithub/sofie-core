@@ -596,6 +596,7 @@ svg.icon {
 			grid-row: title-identifiers / end;
 
 			.segment-timeline__part-identifiers__identifier {
+				//Freeze markers on Segment headers
 				margin: 2.5px;
 				padding: 0 4px;
 				background-color: $part-identifier;
@@ -1410,8 +1411,8 @@ svg.icon {
 				}
 
 				&::before {
-					bottom: 0;
-					left: -1px;
+					bottom: -1px;
+					left: -2px;
 					@include take-arrow();
 				}
 			}
@@ -2173,6 +2174,7 @@ svg.icon {
 			}
 
 			.segment-timeline__identifier {
+				//Freeze markers on parts in the Timeline Rundown view
 				position: absolute;
 				bottom: 0;
 				z-index: -1;

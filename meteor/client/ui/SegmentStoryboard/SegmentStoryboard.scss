@@ -293,11 +293,12 @@ $part-right-padding: 5px;
 	}
 
 	> .segment-storyboard__identifier {
+		//Freeze indicator on Timeline Storyboard view
 		position: absolute;
 		bottom: 0;
 		left: 0;
 		z-index: -1;
-		padding: 0 10px 0 0;
+		padding: 0 4px 0 10px;
 		box-sizing: border-box;
 		background-color: $part-identifier;
 		border-radius: 0 10px 10px 0;
