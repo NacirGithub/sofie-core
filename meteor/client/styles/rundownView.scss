@@ -603,6 +603,12 @@ svg.icon {
 				color: $part-identifier-text;
 				border-radius: 0 10px 10px 0;
 				font-size: 0.85em;
+
+				&:hover {
+					background-color: #8c8c8c;
+					color: #fff;
+				}	
+		
 			}
 		}
 	}
