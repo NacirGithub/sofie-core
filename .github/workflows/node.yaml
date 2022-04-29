@@ -90,7 +90,8 @@ jobs:
         id: image-tags
         run: |
           IMAGES=
-          DOCKER_TAG=${{ steps.docker-tag.outputs.tag }}
+          DOCKER_TAG=test
+          # ${{ steps.docker-tag.outputs.tag }}
           # check if a release branch, or master, or a tag
           # if [[ $DOCKER_TAG =~ ^release([0-9]+)$ || $DOCKER_TAG == "latest" || "${{ github.ref }}" == refs/tags/* ]]
           # then
