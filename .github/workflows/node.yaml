@@ -167,6 +167,7 @@ jobs:
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
+        if: ${{ steps.image-tags.outputs.images }}
         with:
           image-ref: "docker.io/my-organization/my-app:${{ github.sha }}"
           format: "table"
