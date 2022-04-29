@@ -164,6 +164,7 @@ jobs:
           context: .
           file: ./meteor/Dockerfile.circle
           push: false
+          load: true
           tags: ${{ steps.image-tags.outputs.images }}
 
       - name: Run Trivy vulnerability scanner
