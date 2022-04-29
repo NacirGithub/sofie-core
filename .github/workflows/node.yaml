@@ -165,6 +165,16 @@ jobs:
           push: true
           tags: ${{ steps.image-tags.outputs.images }}
 
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "docker.io/my-organization/my-app:${{ github.sha }}"
+          format: "table"
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH,MEDIUM"
+
   build-gateways:
     # TODO - should this be dependant on tests or something passing if we are on a tag?
     name: Build gateways
