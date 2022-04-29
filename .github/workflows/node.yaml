@@ -169,7 +169,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         if: ${{ steps.image-tags.outputs.images }}
         with:
-          image-ref: "docker.io/my-organization/my-app:${{ github.sha }}"
+          image-ref: ${{ steps.image-tags.outputs.images }}
           format: "table"
           exit-code: "1"
           ignore-unfixed: true
