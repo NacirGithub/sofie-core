@@ -131,3 +131,6 @@ export type WorkerId = ProtectedString<'WorkerId'>
 
 /** A string, identifying a WorkerThread */
 export type WorkerThreadId = ProtectedString<'WorkerThreadId'>
+
+/** A string, identifyinf a TimelineDatastore entry */
+export type TimelineDatastoreEntryId = ProtectedString<'TimelineDatastoreEntryId'>

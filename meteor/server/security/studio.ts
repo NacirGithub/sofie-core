@@ -73,6 +73,9 @@ export namespace StudioContentWriteAccess {
 	export function timeline(cred0: Credentials, studioId: StudioId) {
 		return anyContent(cred0, studioId)
 	}
+	export function timelineDatastore(cred0: Credentials, studioId: StudioId) {
+		return anyContent(cred0, studioId)
+	}
 	export function routeSet(cred0: Credentials, studioId: StudioId) {
 		return anyContent(cred0, studioId)
 	}

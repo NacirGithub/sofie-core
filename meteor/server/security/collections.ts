@@ -40,6 +40,7 @@ import { SystemWriteAccess } from './system'
 import { Buckets } from '../../lib/collections/Buckets'
 import { studioContentAllowWrite } from './studio'
 import { TriggeredActions } from '../../lib/collections/TriggeredActions'
+import { TimelineDatastore } from '../../lib/collections/TimelineDatastore'
 
 // Set up direct collection write access
 
@@ -197,6 +198,17 @@ Timeline.allow({
 	},
 	update(_userId, _doc, _fields, _modifier) {
 		return false
+	},
+	remove(_userId, _doc) {
+		return false
+	},
+})
+TimelineDatastore.allow({
+	insert(userId, doc): boolean {
+		return studioContentAllowWrite(userId, doc)
+	},
+	update(userId, doc, fields, _modifier) {
+		return studioContentAllowWrite(userId, doc) && rejectFields(doc, fields, ['_id'])
 	},
 	remove(_userId, _doc) {
 		return false

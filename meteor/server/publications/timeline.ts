@@ -20,6 +20,7 @@ import { PeripheralDeviceReadAccess } from '../security/peripheralDevice'
 import { StudioReadAccess } from '../security/studio'
 import { fetchStudioLight, StudioLight } from '../../lib/collections/optimizations'
 import { FastTrackObservers, setupFastTrackObserver } from './fastTrack'
+import { TimelineDatastore, TimelineDatastoreEntry } from '../../lib/collections/TimelineDatastore'
 
 meteorPublish(PubSub.timeline, function (selector, token) {
 	if (!selector) throw new Meteor.Error(400, 'selector argument missing')
@@ -28,6 +29,16 @@ meteorPublish(PubSub.timeline, function (selector, token) {
 	}
 	if (StudioReadAccess.studioContent(selector, { userId: this.userId, token })) {
 		return Timeline.find(selector, modifier)
+	}
+	return null
+})
+meteorPublish(PubSub.timelineDatastore, function (selector, token) {
+	if (!selector) throw new Meteor.Error(400, 'selector argument missing')
+	const modifier: FindOptions<TimelineDatastoreEntry> = {
+		fields: {},
+	}
+	if (StudioReadAccess.studioContent(selector, { userId: this.userId, token })) {
+		return TimelineDatastore.find(selector, modifier)
 	}
 	return null
 })

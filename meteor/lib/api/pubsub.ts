@@ -33,6 +33,7 @@ export enum PubSub {
 	studios = 'studios',
 	studioOfDevice = 'studioOfDevice',
 	timeline = 'timeline',
+	timelineDatastore = 'timelineDatastore',
 	userActionsLog = 'userActionsLog',
 	/** @deprecated */
 	mediaWorkFlows = 'mediaWorkFlows',
