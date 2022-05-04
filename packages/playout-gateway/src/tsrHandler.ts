@@ -337,7 +337,7 @@ export class TSRHandler {
 		}
 		this._observers.push(expectedPlayoutItemsObserver)
 
-		const timelineDatastoreObserver = this._coreHandler.core.observe('timelineDatastore')
+		const timelineDatastoreObserver = this._coreHandler.core.observe('studioTimelineDatastore')
 		timelineDatastoreObserver.added = () => {
 			this._triggerUpdateDatastore()
 		}
@@ -956,7 +956,7 @@ export class TSRHandler {
 		this._updateDatastore().catch((e) => this.logger.error('Error in _updateDatastore', e))
 	}
 	private async _updateDatastore() {
-		const datastoreCollection = this._coreHandler.core.getCollection('timelineDatastore')
+		const datastoreCollection = this._coreHandler.core.getCollection('studioTimelineDatastore')
 		const peripheralDevice = this._getPeripheralDevice()
 
 		const datastoreObjs = datastoreCollection.find({

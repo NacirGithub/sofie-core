@@ -61,6 +61,24 @@ meteorCustomPublishArray<RoutedTimeline>(
 		}
 	}
 )
+meteorCustomPublishArray<TimelineDatastoreEntry>(
+	PubSub.timelineDatastoreForDevice,
+	'studioTimelineDatastore',
+	function (pub, deviceId: PeripheralDeviceId, token) {
+		if (
+			PeripheralDeviceReadAccess.peripheralDeviceContent({ deviceId: deviceId }, { userId: this.userId, token })
+		) {
+			const peripheralDevice = PeripheralDevices.findOne(deviceId)
+
+			if (!peripheralDevice) throw new Meteor.Error('PeripheralDevice "' + deviceId + '" not found')
+
+			const studioId = peripheralDevice.studioId
+			if (!studioId) return []
+
+			createObserverForTimelineDatastorePublication(pub, PubSub.timelineDatastoreForDevice, studioId)
+		}
+	}
+)
 
 meteorCustomPublishArray<RoutedTimeline>(
 	PubSub.timelineForStudio,
@@ -197,6 +215,48 @@ function createObserverForTimelinePublication(
 			}
 		},
 		0 // ms
+	)
+	pub.onStop(() => {
+		observer.stop()
+	})
+}
+function createObserverForTimelineDatastorePublication(
+	pub: CustomPublishArray<TimelineDatastoreEntry>,
+	observerId: PubSub,
+	studioId: StudioId
+) {
+	const observer = setUpOptimizedObserver<TimelineDatastoreEntry[], { studioId: StudioId | undefined }>(
+		`pub_${observerId}_${studioId}`,
+		(triggerUpdate) => {
+			// Set up observers:
+			return [
+				TimelineDatastore.find({ studioId }).observe({
+					added: () => triggerUpdate({ studioId: studioId }),
+					changed: () => triggerUpdate({ studioId: studioId }),
+					removed: () => triggerUpdate({ studioId: undefined }),
+				}),
+			]
+		},
+		() => {
+			// Initialize data
+			return {
+				studioId: studioId,
+			}
+		},
+		(newData: { studioId: StudioId | undefined }) => {
+			// Prepare data for publication:
+
+			if (!newData.studioId) {
+				return []
+			} else {
+				const datastore = TimelineDatastore.find({ studioId }).fetch()
+
+				return datastore
+			}
+		},
+		(newData) => {
+			pub.updatedDocs(newData)
+		}
 	)
 	pub.onStop(() => {
 		observer.stop()
