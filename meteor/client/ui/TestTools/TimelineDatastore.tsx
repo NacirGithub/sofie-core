@@ -89,13 +89,13 @@ function ComponentDatastoreControls({ studioId }: IDatastoreControlsProps) {
 	return (
 		<div>
 			<div>
-				<button className="btn btn-primary" onClick={() => createOrEdit('input', 1)}>
+				<button className="btn btn-primary" onMouseDown={() => createOrEdit('input', 1)}>
 					1
 				</button>
-				<button className="btn btn-primary" onClick={() => createOrEdit('input', 2)}>
+				<button className="btn btn-primary" onMouseDown={() => createOrEdit('input', 2)}>
 					2
 				</button>
-				<button className="btn btn-primary" onClick={() => createOrEdit('input', 3)}>
+				<button className="btn btn-primary" onMouseDown={() => createOrEdit('input', 3)}>
 					3
 				</button>
 			</div>
