@@ -3116,7 +3116,7 @@
     webpack-sources "^1.4.3"
 
 "@sofie-automation/blueprints-integration@link:blueprints-integration":
-  version "1.42.0-in-development"
+  version "1.43.0-in-development"
   dependencies:
     moment "2.29.3"
     timeline-state-resolver-types "7.1.0-release42.1"
@@ -3144,7 +3144,7 @@
     shelljs "^0.8.5"
 
 "@sofie-automation/corelib@link:corelib":
-  version "1.42.0-in-development"
+  version "1.43.0-in-development"
   dependencies:
     "@sofie-automation/blueprints-integration" "link:blueprints-integration"
     fast-clone "^1.5.13"
@@ -14667,10 +14667,17 @@ timeline-state-resolver-types@7.1.0-release42.1:
   dependencies:
     tslib "^2.3.1"
 
-timeline-state-resolver@7.1.0-release42.1:
-  version "7.1.0-release42.1"
-  resolved "https://registry.yarnpkg.com/timeline-state-resolver/-/timeline-state-resolver-7.1.0-release42.1.tgz#16d6c0c45b17b0d1346cfc22b88fe4c6d79620da"
-  integrity sha512-x7Nn5cr7bFcXZ6HPssRHQoUNP0pFNMTBBvRfMvEIHnO3/Xur/lpJAjsYiEH37GD+4eEDjsk64Yhhi7fWh3rc6Q==
+timeline-state-resolver-types@7.2.0-nightly-feat-timeline-datastore-20220505-164033-8e06eb68c.0:
+  version "7.2.0-nightly-feat-timeline-datastore-20220505-164033-8e06eb68c.0"
+  resolved "https://registry.yarnpkg.com/timeline-state-resolver-types/-/timeline-state-resolver-types-7.2.0-nightly-feat-timeline-datastore-20220505-164033-8e06eb68c.0.tgz#b00ef3121f70735f5de17621ecbfe142d56c0575"
+  integrity sha512-SuSe+18E6dEnp1axoD4cl8xMig/5hEeRtbpW6y5nizQQYO6Mwk8mpt4nvvqP66Wn/BqIuII5OmqFwBFWYkN6UQ==
+  dependencies:
+    tslib "^2.3.1"
+
+timeline-state-resolver@7.2.0-nightly-feat-timeline-datastore-20220505-164033-8e06eb68c.0:
+  version "7.2.0-nightly-feat-timeline-datastore-20220505-164033-8e06eb68c.0"
+  resolved "https://registry.yarnpkg.com/timeline-state-resolver/-/timeline-state-resolver-7.2.0-nightly-feat-timeline-datastore-20220505-164033-8e06eb68c.0.tgz#3fdd555f989b177dfdf5d33720ce84b823d0b235"
+  integrity sha512-YQh3RSXxsao8G6q0xzXPDO/F1L4GVu4QW/A0J3CDDsx88KX5c8JUUkmq3xoWqiuia9NYGOAM8X7tRBdUXcDsrQ==
   dependencies:
     "@tv2media/v-connection" "^6.0.0"
     atem-connection "2.4.0"
@@ -14692,7 +14699,7 @@ timeline-state-resolver@7.1.0-release42.1:
     sprintf-js "^1.1.2"
     superfly-timeline "^8.2.7"
     threadedclass "^1.0.2"
-    timeline-state-resolver-types "7.1.0-release42.1"
+    timeline-state-resolver-types "7.2.0-nightly-feat-timeline-datastore-20220505-164033-8e06eb68c.0"
     tslib "^2.3.1"
     tv-automation-quantel-gateway-client "^2.0.4"
     underscore "^1.12.0"
