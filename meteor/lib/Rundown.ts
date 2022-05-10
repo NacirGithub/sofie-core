@@ -187,6 +187,7 @@ export function getPieceInstancesForPartInstance(
 				? currentPartInstancePieceInstances
 				: PieceInstances.find({ partInstanceId: partInstance._id }, options).fetch()
 		// check if we can return the results immediately
+		console.log(partInstance.timings)
 		if (results.length > 0 || !pieceInstanceSimulation) return results
 
 		// if a simulation has been requested and less than SIMULATION_INVALIDATION time has passed
@@ -199,8 +200,13 @@ export function getPieceInstancesForPartInstance(
 				(partInstance.timings.next || 0) > now - SIMULATION_INVALIDATION ||
 				(partInstance.timings.take || 0) > now - SIMULATION_INVALIDATION)
 		) {
+			if (partInstance.timings) {
+				console.log('next', (partInstance.timings.next || 0) > now - SIMULATION_INVALIDATION)
+				console.log('take', (partInstance.timings.take || 0) > now - SIMULATION_INVALIDATION)
+			}
 			// make sure to invalidate the current computation after SIMULATION_INVALIDATION has passed
 			invalidateAfter(SIMULATION_INVALIDATION)
+			console.log('Simulating Piece Instances during a take', partInstance._id, partInstance.timings, now)
 			return getPieceInstancesForPart(
 				playlistActivationId || protectString(''),
 				currentPartInstance,
@@ -224,6 +230,7 @@ export function getPieceInstancesForPartInstance(
 				true
 			)
 		} else {
+			console.log('not simulating', partInstance._id)
 			// otherwise, return results as they are
 			return results
 		}

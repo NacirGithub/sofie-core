@@ -637,6 +637,10 @@ export const Prompter = translateWithTracker<IPrompterProps, {}, IPrompterTracke
 					},
 				})
 			})
+
+			this.autorun(() => {
+				console.log('Subscriptions: ' + this.subscriptionsReady())
+			})
 		}
 
 		getScrollAnchor = () => {
@@ -697,16 +701,19 @@ export const Prompter = translateWithTracker<IPrompterProps, {}, IPrompterTracke
 		}
 
 		shouldComponentUpdate(_nextProps, _nextState): boolean {
+			console.log(`shouldComponentUpdate ${performance.now()}`)
 			clearTimeout(this._debounceUpdate)
 			this._debounceUpdate = setTimeout(() => this.forceUpdate(), 250)
 			return false
 		}
 
 		getSnapshotBeforeUpdate() {
+			console.log(`getSnapshotBeforeUpdate ${performance.now()}`)
 			return this.getScrollAnchor()
 		}
 
 		componentDidUpdate(_prevProps, _prevState, snapshot: ScrollAnchor) {
+			console.log(`componentDidUpdate ${performance.now()}`)
 			this.restoreScrollAnchor(snapshot)
 		}
 

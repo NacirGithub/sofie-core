@@ -23,6 +23,11 @@ import {
 	RundownBaselineAdLibAction,
 	RundownBaselineAdLibActions,
 } from '../../lib/collections/RundownBaselineAdLibActions'
+import { setUpOptimizedObserver } from '../lib/optimizedObserver'
+import { meteorCustomPublishArray } from '../lib/customPublication'
+import { CollectionName } from '@sofie-automation/corelib/dist/dataModel/Collections'
+import { sleep } from '@sofie-automation/corelib/dist/lib'
+import { waitForPromise } from '../../lib/lib'
 
 meteorPublish(PubSub.rundowns, function (selector0, token: string) {
 	const { cred, selector } = AutoFillSelector.organizationId(this.userId, selector0, token)
@@ -74,23 +79,95 @@ meteorPublish(PubSub.parts, function (selector: MongoQuery<DBPart>, token?: stri
 	}
 	return null
 })
-meteorPublish(PubSub.partInstances, function (selector: MongoQuery<DBPartInstance>, token?: string) {
-	if (!selector) throw new Meteor.Error(400, 'selector argument missing')
-	const modifier: FindOptions<DBPartInstance> = {
-		fields: {
-			// @ts-ignore
-			'part.metaData': 0,
-		},
-	}
 
-	// Enforce only not-reset
-	selector.reset = { $ne: true }
+meteorCustomPublishArray<any>(
+	PubSub.partInstances,
+	CollectionName.PartInstances,
+	function (pub, selector: MongoQuery<DBPartInstance>, token?: string) {
+		if (!selector) throw new Meteor.Error(400, 'selector argument missing')
+		const modifier: FindOptions<DBPartInstance> = {
+			fields: {
+				// @ts-ignore
+				'part.metaData': 0,
+			},
+		}
 
-	if (RundownReadAccess.rundownContent(selector, { userId: this.userId, token })) {
-		return PartInstances.find(selector, modifier)
+		// Enforce only not-reset
+		selector.reset = { $ne: true }
+
+		const id = JSON.stringify(selector)
+
+		if (RundownReadAccess.rundownContent(selector, { userId: this.userId, token })) {
+			const observer = setUpOptimizedObserver(
+				`pub_partinstances_${id}`,
+				(triggerUpdate) => {
+					// Set up observers:
+					return [
+						PartInstances.find(selector, modifier).observe({
+							added: () => triggerUpdate({}),
+							changed: () => triggerUpdate({}),
+							removed: () => triggerUpdate({}),
+						}),
+					]
+				},
+				() => {
+					// Initial data fetch
+					return {
+						// selector: selector,
+					}
+				},
+				(_context: {}) => {
+					waitForPromise(sleep(1000))
+
+					return PartInstances.find(selector, modifier).fetch()
+				},
+				(newData) => {
+					pub.updatedDocs(newData)
+				},
+				10 // ms
+			)
+			pub.onStop(() => {
+				observer.stop()
+			})
+		} else {
+			pub.updatedDocs([])
+		}
 	}
-	return null
-})
+)
+
+/* 
+
+pieceInstances.find().observe({
+    added: (...args) => console.log('piece added', args),
+    changed: (...args) => console.log('piece changed', args),
+    removed: (...args) => console.log('piece removed', args)
+    
+});
+partInstances.find().observe({
+    added: (...args) => console.log('part added', args),
+    changed: (...args) => console.log('part changed', args),
+    removed: (...args) => console.log('part removed', args)
+    
+});
+*/
+
+// meteorPublish(PubSub.partInstances, function (selector: MongoQuery<DBPartInstance>, token?: string) {
+// 	if (!selector) throw new Meteor.Error(400, 'selector argument missing')
+// 	const modifier: FindOptions<DBPartInstance> = {
+// 		fields: {
+// 			// @ts-ignore
+// 			'part.metaData': 0,
+// 		},
+// 	}
+
+// 	// Enforce only not-reset
+// 	selector.reset = { $ne: true }
+
+// 	if (RundownReadAccess.rundownContent(selector, { userId: this.userId, token })) {
+// 		return PartInstances.find(selector, modifier)
+// 	}
+// 	return null
+// })
 meteorPublish(PubSub.partInstancesSimple, function (selector: MongoQuery<DBPartInstance>, token?: string) {
 	if (!selector) throw new Meteor.Error(400, 'selector argument missing')
 	const modifier: FindOptions<DBPartInstance> = {
@@ -178,29 +255,90 @@ meteorPublish(PubSub.pieceInstances, function (selector: MongoQuery<PieceInstanc
 	return null
 })
 
-meteorPublish(PubSub.pieceInstancesSimple, function (selector: MongoQuery<PieceInstance>, token?: string) {
-	if (!selector) throw new Meteor.Error(400, 'selector argument missing')
-	const modifier: FindOptions<PieceInstance> = {
-		fields: {
-			// @ts-ignore
-			'piece.metaData': 0,
-			// @ts-ignore
-			'piece.content.timelineObjects': 0,
-			// @ts-ignore
-			startedPlayback: 0,
-			// @ts-ignore
-			stoppedPlayback: 0,
-		},
-	}
+meteorCustomPublishArray<any>(
+	PubSub.pieceInstancesSimple,
+	CollectionName.PieceInstances,
+	function (pub, selector: MongoQuery<PieceInstance>, token?: string) {
+		if (!selector) throw new Meteor.Error(400, 'selector argument missing')
+		const modifier: FindOptions<PieceInstance> = {
+			fields: {
+				// @ts-ignore
+				'piece.metaData': 0,
+				// @ts-ignore
+				'piece.content.timelineObjects': 0,
+				// @ts-ignore
+				startedPlayback: 0,
+				// @ts-ignore
+				stoppedPlayback: 0,
+			},
+		}
 
-	// Enforce only not-reset
-	selector.reset = { $ne: true }
+		// Enforce only not-reset
+		selector.reset = { $ne: true }
 
-	if (RundownReadAccess.rundownContent(selector, { userId: this.userId, token })) {
-		return PieceInstances.find(selector, modifier)
+		const id = JSON.stringify(selector)
+
+		if (RundownReadAccess.rundownContent(selector, { userId: this.userId, token })) {
+			const observer = setUpOptimizedObserver(
+				`pub_${id}`,
+				(triggerUpdate) => {
+					// Set up observers:
+					return [
+						PieceInstances.find(selector, modifier).observe({
+							added: () => triggerUpdate({}),
+							changed: () => triggerUpdate({}),
+							removed: () => triggerUpdate({}),
+						}),
+					]
+				},
+				() => {
+					// Initial data fetch
+					return {
+						// selector: selector,
+					}
+				},
+				(_context: {}) => {
+					waitForPromise(sleep(5000))
+
+					return PieceInstances.find(selector, modifier).fetch()
+				},
+				(newData) => {
+					pub.updatedDocs(newData)
+				},
+				10 // ms
+			)
+			pub.onStop(() => {
+				observer.stop()
+			})
+		} else {
+			pub.updatedDocs([])
+		}
 	}
-	return null
-})
+)
+
+// meteorPublish(PubSub.pieceInstancesSimple, function (selector: MongoQuery<PieceInstance>, token?: string) {
+// 	if (!selector) throw new Meteor.Error(400, 'selector argument missing')
+// 	const modifier: FindOptions<PieceInstance> = {
+// 		fields: {
+// 			// @ts-ignore
+// 			'piece.metaData': 0,
+// 			// @ts-ignore
+// 			'piece.content.timelineObjects': 0,
+// 			// @ts-ignore
+// 			startedPlayback: 0,
+// 			// @ts-ignore
+// 			stoppedPlayback: 0,
+// 		},
+// 	}
+
+// 	// Enforce only not-reset
+// 	selector.reset = { $ne: true }
+
+// 	if (RundownReadAccess.rundownContent(selector, { userId: this.userId, token })) {
+// 		return PieceInstances.find(selector, modifier)
+// 	}
+// 	return null
+// })
 meteorPublish(PubSub.expectedMediaItems, function (selector: MongoQuery<ExpectedMediaItem>, token?: string) {
 	const allowed = RundownReadAccess.expectedMediaItems(selector, { userId: this.userId, token })
 	if (!allowed) {

@@ -48,6 +48,8 @@ export namespace PrompterAPI {
 	export function getPrompterData(playlistId: RundownPlaylistId): PrompterData | null {
 		check(playlistId, String)
 
+		console.log('getPrompterData')
+
 		const playlist = RundownPlaylists.findOne(playlistId)
 
 		if (!playlist) {
@@ -88,7 +90,14 @@ export namespace PrompterAPI {
 					isTaken: 0,
 					previousPartEndState: 0,
 					takeCount: 0,
-					timings: 0,
+					// @ts-ignore-start
+					'timings.takeDone': 0,
+					'timings.startedPlayback': 0,
+					'timings.takeOut': 0,
+					'timings.stoppedPlayback': 0,
+					'timings.playOffset': 0,
+					'timings.duration': 0,
+					// @ts-ignore-end
 				},
 			}
 		)
