@@ -50,10 +50,6 @@ export async function activateRundownPlaylist(
 		},
 	})
 
-	// Re-Initialize the ActivationCache now when the rundownPlaylist is active
-	// const rundownsInPlaylist = cache.Rundowns.findFetch({})
-	// await cache.activationCache.initialize(cache.Playlist.doc, rundownsInPlaylist)
-
 	let rundown: DBRundown | undefined
 
 	const { currentPartInstance } = getSelectedPartInstancesFromCache(cache)
