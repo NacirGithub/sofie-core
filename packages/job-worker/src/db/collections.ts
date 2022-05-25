@@ -32,6 +32,7 @@ import { DBShowStyleBase } from '@sofie-automation/corelib/dist/dataModel/ShowSt
 import { DBShowStyleVariant } from '@sofie-automation/corelib/dist/dataModel/ShowStyleVariant'
 import { DBStudio } from '@sofie-automation/corelib/dist/dataModel/Studio'
 import { TimelineComplete } from '@sofie-automation/corelib/dist/dataModel/Timeline'
+import { DBTimelineDatastoreEntry } from '@sofie-automation/corelib/dist/dataModel/TimelineDatastore'
 import { ExpectedPackageDB } from '@sofie-automation/corelib/dist/dataModel/ExpectedPackages'
 import { PackageInfoDB } from '@sofie-automation/corelib/dist/dataModel/PackageInfos'
 import { ProtectedString } from '@sofie-automation/corelib/dist/protectedString'
@@ -85,6 +86,7 @@ export interface IDirectCollections {
 	ShowStyleVariants: ICollection<DBShowStyleVariant>
 	Studios: ICollection<DBStudio>
 	Timelines: ICollection<TimelineComplete>
+	TimelineDatastores: ICollection<DBTimelineDatastoreEntry>
 
 	ExpectedPackages: ICollection<ExpectedPackageDB>
 	PackageInfos: ICollection<PackageInfoDB>
@@ -124,6 +126,7 @@ export function getMongoCollections(client: MongoClient, dbName: string): Readon
 			ShowStyleVariants: wrapMongoCollection(database.collection(CollectionName.ShowStyleVariants)),
 			Studios: wrapMongoCollection(database.collection(CollectionName.Studios)),
 			Timelines: wrapMongoCollection(database.collection(CollectionName.Timelines)),
+			TimelineDatastores: wrapMongoCollection(database.collection(CollectionName.TimelineDatastore)),
 
 			ExpectedPackages: wrapMongoCollection(database.collection(CollectionName.ExpectedPackages)),
 			PackageInfos: wrapMongoCollection(database.collection(CollectionName.PackageInfos)),
